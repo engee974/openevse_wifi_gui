@@ -38,6 +38,7 @@ var mergeOptions = {
       "src/view_models/WiFiConfigViewModel.js",
       "src/view_models/PasswordViewModel.js",
       "src/view_models/ConfigGroupViewModel.js",
+      "src/view_models/ScheduleViewModel.js"
     ],
     "home.js": [
       "src/openevse.js",
@@ -102,12 +103,14 @@ module.exports = {
         "/apoff",
         "/divertmode",
         "/debug",
-        "/evse"
+        "/evse",
+        "/schedule",
+        "/override"
       ],
       target: openevseEndpoint
     },
     {
-      context: [ 
+      context: [
         "/ws",
         "/debug/console",
         "/evse/console"

@@ -1,4 +1,4 @@
-/* global $, ko, ConfigViewModel, StatusViewModel, RapiViewModel, WiFiScanViewModel, WiFiConfigViewModel, OpenEvseViewModel, PasswordViewModel, ZonesViewModel, ConfigGroupViewModel */
+/* global $, ko, ConfigViewModel, StatusViewModel, RapiViewModel, WiFiScanViewModel, WiFiConfigViewModel, OpenEvseViewModel, PasswordViewModel, ZonesViewModel, ConfigGroupViewModel, ScheduleViewModel */
 /* exported OpenEvseWiFiViewModel */
 
 function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
@@ -37,6 +37,7 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   self.wifi = new WiFiConfigViewModel(self.baseEndpoint, self.config, self.status, self.scan);
   self.openevse = new OpenEvseViewModel(self.baseEndpoint, self.config, self.status);
   self.zones = new ZonesViewModel(self.baseEndpoint);
+  self.schedule = new ScheduleViewModel(self.baseEndpoint);
 
   self.initialised = ko.observable(false);
   self.updating = ko.observable(false);
@@ -217,36 +218,39 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   self.itemsLoaded = ko.pureComputed(function () {
     return self.loadedCount() + self.openevse.updateCount();
   });
-  self.itemsTotal = ko.observable(2 + self.openevse.updateTotal());
+  self.itemsTotal = ko.observable(3 + self.openevse.updateTotal());
   self.start = function () {
     self.updating(true);
     self.status.update(function () {
       self.loadedCount(self.loadedCount() + 1);
       self.config.update(function () {
         self.loadedCount(self.loadedCount() + 1);
-        // If we are accessing on a .local domain try and redirect
-        if(self.baseHost().endsWith(".local") && "" !== self.status.ipaddress()) {
-          if("" === self.config.www_username())
-          {
-            // Redirect to the IP internally
-            self.baseHost(self.status.ipaddress());
-          } else {
-            window.location.replace("http://" + self.status.ipaddress() + ":" + self.basePort());
-          }
-        }
-        if(self.status.rapi_connected()) {
-          self.openevse.update(self.finishedStarting);
-        } else {
-          self.finishedStarting();
-          self.status.rapi_connected.subscribe((val) => {
-            if(val) {
-              self.config.update(() => {
-                self.openevse.update(() => {
-                });
-              });
+        self.schedule.update(function () {
+          self.loadedCount(self.loadedCount() + 1);
+          // If we are accessing on a .local domain try and redirect
+          if(self.baseHost().endsWith(".local") && "" !== self.status.ipaddress()) {
+            if("" === self.config.www_username())
+            {
+              // Redirect to the IP internally
+              self.baseHost(self.status.ipaddress());
+            } else {
+              window.location.replace("http://" + self.status.ipaddress() + ":" + self.basePort());
             }
-          });
-        }
+          }
+          if(self.status.rapi_connected()) {
+            self.openevse.update(self.finishedStarting);
+          } else {
+            self.finishedStarting();
+            self.status.rapi_connected.subscribe((val) => {
+              if(val) {
+                self.config.update(() => {
+                  self.openevse.update(() => {
+                  });
+                });
+              }
+            });
+          }
+        });
       });
       self.connect();
     });
@@ -472,7 +476,6 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
     return true;
   });
 
-
   // -----------------------------------------------------------------------
   // Event: Vehicle settings save
   // -----------------------------------------------------------------------
@@ -483,6 +486,18 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   });
   self.config.pause_uses_disabled.subscribe(() => {
     self.vehicleGroup.save();
+  });
+
+  // -----------------------------------------------------------------------
+  // Event: Display settings save
+  // -----------------------------------------------------------------------
+  self.displayGroup = new ConfigGroupViewModel(self.baseEndpoint, () => {
+    return {
+      led_brightness: self.config.led_brightness()
+    };
+  });
+  self.config.led_brightness.subscribe(() => {
+    self.displayGroup.save();
   });
 
   // -----------------------------------------------------------------------
@@ -549,7 +564,7 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   self.divertFeedType = ko.computed({
     read: () => {
       var ret = self.haveSolar() ? "solar" :
-                self.haveGridIe() ? "grid_ie" : 
+                self.haveGridIe() ? "grid_ie" :
                 self._divertFeedType;
       self._divertFeedType = ret;
       return ret;
@@ -567,7 +582,7 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
   });
   self.divertFeedValue = ko.computed({
     read: () => {
-      return "solar" === self.divertFeedType() ? 
+      return "solar" === self.divertFeedType() ?
                 self.config.mqtt_solar() :
                 self.config.mqtt_grid_ie();
     },
@@ -703,6 +718,53 @@ function OpenEvseWiFiViewModel(baseHost, basePort, baseProtocol)
       });
     }
   };
+
+  // -----------------------------------------------------------------------
+  // Event: Manual Override
+  // -----------------------------------------------------------------------
+  self.setOverrideFetching = ko.observable(false);
+  self.setOverrideSuccess = ko.observable(false);
+  self.setOverride = () =>
+  {
+    self.setOverrideFetching(true);
+    self.setOverrideSuccess(false);
+
+    let props = {
+      state: self.openevse.isPaused() ? "active" : "disabled",
+    };
+
+    $.ajax({
+      method: "POST",
+      url: self.baseEndpoint() + "/override",
+      data: JSON.stringify(props),
+      contentType: "application/json"
+    }).done(() => {
+      self.setOverrideSuccess(true);
+    }).fail(() => {
+      alert("Failed to set manual override");
+    }).always(() => {
+      self.setOverrideFetching(false);
+    });
+  };
+
+  self.clearOverrideFetching = ko.observable(false);
+  self.clearOverrideSuccess = ko.observable(false);
+  self.clearOverride = () =>
+  {
+    self.clearOverrideFetching(true);
+    self.clearOverrideSuccess(false);
+    $.ajax({
+      method: "DELETE",
+      url: self.baseEndpoint() + "/override"
+    }).done(() => {
+      self.clearOverrideSuccess(true);
+    }).fail(() => {
+      alert("Failed to clear manual override");
+    }).always(() => {
+      self.clearOverrideFetching(false);
+    });
+  };
+
 
   // -----------------------------------------------------------------------
   // Event: Update

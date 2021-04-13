@@ -21,14 +21,20 @@ function StatusViewModel(baseEndpoint) {
     "free_heap": 0,
     "comm_sent": 0,
     "comm_success": 0,
-    "rapi_connected": true,
+    "rapi_connected": 1,
+    "evse_connected": 1,
     "amp": 0,
     "voltage": false,
     "pilot": 0,
-    "temp1": 0,
-    "temp2": 0,
-    "temp3": 0,
+    "temp": false,
+    "temp1": false,
+    "temp2": false,
+    "temp3": false,
+    "temp4": false,
     "state": 0,
+    "vehicle": false,
+    "colour": false,
+    "manual_override": false,
     "elapsed": 0,
     "wattsec": 0,
     "watthour": 0,
@@ -84,7 +90,7 @@ function StatusViewModel(baseEndpoint) {
         estate = "Starting";
         break;
       case 1:
-        estate = "Not Connected";
+        estate = "EV Not connected";
         break;
       case 2:
         estate = "EV Connected";
@@ -117,10 +123,17 @@ function StatusViewModel(baseEndpoint) {
         estate = "Over Current";
         break;
       case 254:
-        estate = "Waiting";
-        break;
       case 255:
-        estate = "Disabled";
+        estate = "Waiting";
+        if(false !== self.vehicle())
+        {
+          estate += " - EV " ;
+          if(1 === self.vehicle()) {
+            estate += "Connected";
+          } else {
+            estate += "Not connected";
+          }
+        }
         break;
       default:
         estate = "Invalid";
